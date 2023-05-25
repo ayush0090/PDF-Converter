@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>PDF Converter</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f1f1f1;
+      padding: 20px;
+    }
+
+    h1 {
+      margin-top: 50px;
+      color: #333;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 30px;
+      padding: 20px;
+      background-color: #fff;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+      border-radius: 10px;
+    }
+
+    .file-input {
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .file-input label {
+      display: inline-block;
+      padding: 10px 20px;
+      background-color: #4caf50;
+      color: #fff;
+      border-radius: 5px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    .file-input label:hover {
+      background-color: #45a049;
+    }
+
+    .file-input input[type="file"] {
+      display: none;
+    }
+
+    #pdfCanvas {
+      border: 1px solid #ccc;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+
+    .button-container {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .button-container button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    .button-container button.primary {
+      background-color: #4caf50;
+    }
+
+    .button-container button.secondary {
+      background-color: #f44336;
+    }
+
+    .button-container button:hover {
+      opacity: 0.8;
+    }
+
+    #previewContainer {
+      display: none;
+      margin-bottom: 20px;
+    }
+
+    #previewImage {
+      max-width: 100%;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>PDF Converter</h1>
+  <div class="container">
+    <div class="file-input">
+      <label for="pdfFile">Select a PDF file</label>
+      <input type="file" id="pdfFile" accept="application/pdf">
+    </div>
+    <div id="pdfCanvas"></div>
+    <div class="button-container">
+      <button id="downloadJPGButton" class="primary">Download JPG</button>
+      <button id="downloadPNGButton" class="primary">Download PNG</button>
+      <button id="downloadWordButton" class="primary">Download Word</button>
+      <button id="downloadExcelButton" class="primary">Download Excel</button>
+    </div>
+    <div id="previewContainer">
+      <img id="previewImage" src="#" alt="Preview">
+    </div>
+  </div>
+
+  <script src="https://mozilla.github.io/pdf.js/build/pdf.js"></script>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+  <script>
+    document.getElementById('pdfFile').addEventListener('change', function(e) {
+      var file = e.target.files[0];
+
+      if (file.type !== 'application/pdf') {
+        console.error('Please select a PDF file.');
+        return;
+      }
+
+      var fileReader = new FileReader();
+
+      fileReader.onload = function() {
+        var typedarray = new Uint8Array(this.result);
+
+        pdfjsLib.getDocument(typedarray).promise.then(function(pdf) {
+          pdf.getPage(1).then(function(page) {
+            var viewport = page.getViewport({ scale: 1 });
+            var canvas = document.createElement('canvas');
+            var context = canvas.getContext('2d');
+
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+
+            var renderContext = {
+              canvasContext: context,
+              viewport: viewport
+            };
+
+            page.render(renderContext).promise.then(function() {
+              var pdfCanvas = document.getElementById('pdfCanvas');
+              pdfCanvas.innerHTML = '';
+              pdfCanvas.appendChild(canvas);
+
+              html2canvas(pdfCanvas, {
+                useCORS: true,
+                scale: 2
+              }).then(function(canvas) {
+                var jpgImage = canvas.toDataURL('image/jpeg');
+                var pngImage = canvas.toDataURL('image/png');
+                var docxFile = dataURItoBlob(jpgImage);
+                var xlsxFile = dataURItoBlob(jpgImage);
+
+                document.getElementById('downloadJPGButton').onclick = function () {
+                  var link = document.createElement('a');
+                  link.href = jpgImage;
+                  link.download = 'converted.jpg';
+                  link.click();
+                };
+                
+                document.getElementById('downloadPNGButton').onclick = function () {
+                  var link = document.createElement('a');
+                  link.href = pngImage;
+                  link.download = 'converted.png';
+                  link.click();
+                };
+
+                document.getElementById('downloadWordButton').onclick = function () {
+                  var link = document.createElement('a');
+                  link.href = URL.createObjectURL(docxFile);
+                  link.download = 'converted.docx';
+                  link.click();
+                };
+
+                document.getElementById('downloadExcelButton').onclick = function () {
+                  var link = document.createElement('a');
+                  link.href = URL.createObjectURL(xlsxFile);
+                  link.download = 'converted.xlsx';
+                  link.click();
+                };
+
+                document.getElementById('previewImage').src = jpgImage;
+                document.getElementById('previewContainer').style.display = 'block';
+              });
+            });
+          });
+        });
+      };
+
+      fileReader.readAsArrayBuffer(file);
+    });
+
+    function dataURItoBlob(dataURI) {
+      var byteString = atob(dataURI.split(',')[1]);
+      var mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+      var ab = new ArrayBuffer(byteString.length);
+      var ia = new Uint8Array(ab);
+      for (var i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      return new Blob([ab], { type: mimeString });
+    }
+  </script>
+</body>
+</html>
